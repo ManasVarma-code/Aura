@@ -1,0 +1,9 @@
+{
+  "name": "Copy of Aura - Private Couple Relationship Ecosystem",
+  "description": "A secure, private space for couples to nurture their relationship through organized tools, shared memories, and AI-assisted connection.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
