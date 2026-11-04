@@ -1,10 +1,18 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { requireSupabase } from '../services/supabase';
 import { Trophy, Star, Lock, Heart, Gift, Sparkles, ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Rewards: React.FC = () => {
   const navigate = useNavigate();
+  const [stats, setStats] = useState({messages:0,memories:0,events:0,checkins:0});
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  useEffect(()=>{let active=true;void requireSupabase().rpc('get_couple_stats').then(({data,error})=>{if(active){if(error)setError('Could not load your milestones.');else setStats(data);setLoading(false);}});return()=>{active=false;};},[]);
+  const points=stats.memories*10+stats.events*5+stats.checkins*5+Math.min(stats.messages,100);
+  const level=Math.floor(points/100);
+  const badges=[{title:'First Memory',unlocked:stats.memories>0},{title:'A Date Together',unlocked:stats.events>0},{title:'Heart Check-in',unlocked:stats.checkins>0},{title:'100 Shared Messages',unlocked:stats.messages>=100}];
 
   const rewardParameters = [
     { title: 'Daily Check-ins', desc: 'Consistency is key to a healthy bond.' },
@@ -18,9 +26,10 @@ const Rewards: React.FC = () => {
       <header className="text-center space-y-2">
         <button onClick={() => navigate('/')} className="absolute left-6 top-8 text-pink-400"><ChevronLeft size={28} /></button>
         <h1 className="text-3xl font-bold text-pink-600">Your Love, Rewarded 💕</h1>
-        <p className="text-gray-500 text-sm max-w-[80%] mx-auto">Something special is on the way. Soon, every effort you make together will earn beautiful rewards.</p>
+        <p className="text-gray-500 text-sm max-w-[80%] mx-auto">Celebrate the moments you create and the care you share.</p>
       </header>
 
+      {error && <p role="alert" className="text-red-600">{error}</p>}
       {/* Preview Card */}
       <div className="bg-gradient-to-br from-pink-400 to-rose-500 p-8 rounded-[2.5rem] text-white shadow-2xl shadow-pink-200 relative overflow-hidden">
         <div className="absolute -bottom-4 -right-4 text-white/10 rotate-12"><Trophy size={160} /></div>
@@ -30,18 +39,18 @@ const Rewards: React.FC = () => {
               <Gift size={28} />
             </div>
             <div>
-              <h3 className="font-bold text-xl">Love Level: 0</h3>
-              <p className="text-pink-100 text-xs font-medium">Coming Soon...</p>
+              <h3 className="font-bold text-xl">Love Level: {loading ? '…' : level}</h3>
+              <p className="text-pink-100 text-xs font-medium">{points} shared points</p>
             </div>
           </div>
           
           <div className="space-y-2">
             <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-pink-100">
-               <span>Journey to Milestone 1</span>
-               <span>Locked</span>
+               <span>Journey to Level {level+1}</span>
+               <span>{points%100}/100</span>
             </div>
             <div className="h-3 w-full bg-white/20 rounded-full overflow-hidden border border-white/10">
-               <div className="h-full w-[10%] bg-white rounded-full shadow-[0_0_15px_white]" />
+               <div style={{width:`${points%100}%`}} className="h-full bg-white rounded-full shadow-[0_0_15px_white]" />
             </div>
           </div>
         </div>
@@ -53,15 +62,15 @@ const Rewards: React.FC = () => {
           <Star size={20} className="text-yellow-400" /> Unlockable Experiences
         </h2>
         <div className="grid grid-cols-2 gap-4">
-          {['Badge Collections', 'Custom Themes', 'Secret Stickers', 'Date Trophies'].map((r) => (
-            <div key={r} className="bg-white p-6 rounded-3xl border border-pink-50 shadow-sm flex flex-col items-center gap-4 group opacity-80">
+          {badges.map((r) => (
+            <div key={r.title} className="bg-white p-6 rounded-3xl border border-pink-50 shadow-sm flex flex-col items-center gap-4 group opacity-80">
               <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-300 relative">
-                 <Lock size={20} />
+                 {r.unlocked ? <Star size={20} className="text-pink-500" /> : <Lock size={20} />}
                  <div className="absolute -top-1 -right-1 p-1 bg-white rounded-full shadow-sm">
                    <Sparkles size={10} className="text-pink-300" />
                  </div>
               </div>
-              <span className="font-bold text-gray-500 text-xs text-center">{r}</span>
+              <span className="font-bold text-gray-500 text-xs text-center">{r.title}{r.unlocked ? ' ✓' : ''}</span>
             </div>
           ))}
         </div>

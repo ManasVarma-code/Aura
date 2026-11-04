@@ -2,10 +2,16 @@
 import React, { useState } from 'react';
 import { Sparkles, MapPin, Coffee, DollarSign, Heart, ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAccount } from '../contexts/AccountContext';
+import { addEvent, localDate } from '../services/sharedService';
 import { geminiService } from '../services/geminiService';
 
 const DatePlanner: React.FC = () => {
   const navigate = useNavigate();
+  const {user}=useAccount();
+  const [date,setDate]=useState(localDate(new Date()));
+  const [saved,setSaved]=useState(false);
+  const [saving,setSaving]=useState(false);
   const [preferences, setPreferences] = useState({
     vibe: 'Cozy',
     budget: 'Affordable',
@@ -13,12 +19,13 @@ const DatePlanner: React.FC = () => {
   });
   const [plan, setPlan] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const generatePlan = async () => {
-    setLoading(true);
-    const result = await geminiService.getPlanDate(`Vibe: ${preferences.vibe}, Budget: ${preferences.budget}, Setting: ${preferences.location}`);
-    setPlan(result);
-    setLoading(false);
+    setLoading(true); setSaved(false);
+    setError('');
+    try { const result = await geminiService.getPlanDate(`Vibe: ${preferences.vibe}, Budget: ${preferences.budget}, Setting: ${preferences.location}`); setPlan(result); }
+    catch { setError('Aura could not create your plan. Please try again.'); } finally { setLoading(false); }
   };
 
   return (
@@ -86,6 +93,7 @@ const DatePlanner: React.FC = () => {
         </button>
       </section>
 
+      {error && <p role="alert" className="text-red-600">{error}</p>}
       {/* Result */}
       {plan && (
         <section className="bg-white p-8 rounded-[2.5rem] border border-pink-100 shadow-lg space-y-6 relative overflow-hidden animate-slide-up">
@@ -99,9 +107,11 @@ const DatePlanner: React.FC = () => {
               {plan}
            </div>
 
+           <label className="block text-sm text-gray-500">Date for your plan<input aria-label="Date for your plan" type="date" required value={date} onChange={e=>setDate(e.target.value)} className="ml-3 p-2 bg-pink-50 rounded-xl" /></label>
+           {saved && <p role="status" className="text-sm text-pink-600">Your plan is in your shared calendar.</p>}
            <div className="pt-6 border-t border-pink-50 flex gap-4">
-              <button className="flex-1 py-3 bg-pink-50 text-pink-500 rounded-xl font-bold text-xs">Add to Calendar</button>
-              <button className="flex-1 py-3 bg-gray-50 text-gray-400 rounded-xl font-bold text-xs">Try Another</button>
+              <button disabled={saving || saved || !date} onClick={async()=>{if(!user?.coupleId || !plan)return;setSaving(true);setError('');try{await addEvent(user.coupleId,'Aura date plan',date,plan.slice(0,4000));setSaved(true);}catch{setError('Could not save your plan. Please try again.');}finally{setSaving(false);}}} className="flex-1 py-3 bg-pink-50 text-pink-500 rounded-xl font-bold text-xs">{saving ? 'Saving…' : saved ? 'Added to Calendar' : 'Add to Calendar'}</button>
+              <button onClick={()=>setPlan(null)} className="flex-1 py-3 bg-gray-50 text-gray-400 rounded-xl font-bold text-xs">Try Another</button>
            </div>
         </section>
       )}

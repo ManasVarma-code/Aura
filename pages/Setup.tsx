@@ -1,23 +1,29 @@
 
 import React, { useState } from 'react';
+import { errorMessage } from '../services/accountService';
 import { Gender, User } from '../types';
 import { Heart, ChevronRight, User as UserIcon, Sparkles } from 'lucide-react';
 
 interface SetupProps {
   user: User;
-  onComplete: (gender: Gender, partnerNickname: string) => void;
+  onComplete: (gender: Gender, partnerNickname: string) => Promise<void>;
 }
 
 const Setup: React.FC<SetupProps> = ({ user, onComplete }) => {
   const [step, setStep] = useState(1);
   const [gender, setGender] = useState<Gender | null>(null);
-  const [partnerNickname, setPartnerNickname] = useState('');
+  const [partnerNickname, setPartnerNickname] = useState(user.partnerNickname);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    setError('');
     if (step === 1 && gender) {
       setStep(2);
     } else if (step === 2 && partnerNickname) {
-      onComplete(gender!, partnerNickname);
+      setBusy(true);
+      try { await onComplete(gender!, partnerNickname.trim()); }
+      catch(e) { setError(errorMessage(e)); } finally { setBusy(false); }
     }
   };
 
@@ -63,7 +69,7 @@ const Setup: React.FC<SetupProps> = ({ user, onComplete }) => {
                 <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-pink-300" size={18} />
                 <input 
                   type="text" 
-                  placeholder="Partner's Nickname (e.g., Honey)" 
+                  maxLength={100} aria-label="Partner nickname" placeholder="Partner's Nickname (e.g., Honey)"
                   className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 focus:ring-pink-200 border border-gray-100 transition-all font-bold"
                   value={partnerNickname}
                   onChange={(e) => setPartnerNickname(e.target.value)}
@@ -80,9 +86,10 @@ const Setup: React.FC<SetupProps> = ({ user, onComplete }) => {
           </div>
         )}
 
+        {error && <p role="alert" className="text-red-600 text-sm">{error}</p>}
         <button 
           onClick={handleNext}
-          disabled={(step === 1 && !gender) || (step === 2 && !partnerNickname)}
+          disabled={busy || (step === 1 && !gender) || (step === 2 && !partnerNickname.trim())}
           className="w-full py-5 bg-pink-500 text-white font-bold rounded-2xl shadow-xl shadow-pink-100 flex items-center justify-center gap-2 hover:bg-pink-600 transition-all disabled:opacity-50 disabled:shadow-none active:scale-95"
         >
           {step === 1 ? 'Continue' : 'Finish Setup'}

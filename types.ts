@@ -22,6 +22,7 @@ export interface User {
   gender: Gender | null;
   linked: boolean;
   coupleCode: string;
+  coupleId?: string;
   partnerCode?: string;
 }
 

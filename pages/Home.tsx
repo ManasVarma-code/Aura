@@ -1,12 +1,28 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAccount } from '../contexts/AccountContext';
+import { requireSupabase } from '../services/supabase';
+import { localDate } from '../services/sharedService';
+import { errorMessage } from '../services/accountService';
 import { Heart, Moon, Sun, Coffee, Sparkles, Smile, MessageCircle } from 'lucide-react';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
-  const [mood, setMood] = useState('Feeling good');
-  const [partnerActivity, setPartnerActivity] = useState('Recently 💕');
+  const [mood, setMood] = useState('');
+  const { user } = useAccount();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let active=true;
+    void requireSupabase().from('mood_checkins').select('mood').eq('author_id',user!.id).eq('checkin_date',localDate(new Date())).maybeSingle().then(({data,error})=>{if(active){if(error)setError('Could not load your check-in.');else setMood(data?.mood || '');}});
+    return()=>{active=false;};
+  }, [user?.id]);
+  const saveMood = async (value:string) => {
+    setSaving(true);setError('');
+    try { const {error}=await requireSupabase().rpc('record_mood',{checkin_mood:value,checkin_day:localDate(new Date())});if(error)throw error;setMood(value); }
+    catch(e){setError(errorMessage(e));}finally{setSaving(false);}
+  };
   
   const quickActions = [
     { label: 'Cycle Tracker', icon: <Moon className="text-pink-400" />, path: '/cycle' },
@@ -34,12 +50,12 @@ const Home: React.FC = () => {
             <div className="w-14 h-14 rounded-full bg-pink-200 border-4 border-white overflow-hidden">
                <img src="https://picsum.photos/seed/partner/200" alt="Partner" />
             </div>
-            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-400 border-2 border-white rounded-full"></div>
+
           </div>
           <div>
-            <h3 className="text-lg font-bold text-gray-800">Your Partner</h3>
+            <h3 className="text-lg font-bold text-gray-800">{user?.partnerNickname || 'Your Partner'}</h3>
             <p className="text-sm text-pink-500 font-medium flex items-center gap-1">
-              <Heart size={14} fill="currentColor" /> {partnerActivity}
+              <Heart size={14} fill="currentColor" /> Your shared space 💕
             </p>
           </div>
         </div>
@@ -54,7 +70,7 @@ const Home: React.FC = () => {
           {['Happy', 'Calm', 'Tired', 'Loving', 'Excited'].map((m) => (
             <button
               key={m}
-              onClick={() => setMood(m)}
+              disabled={saving} aria-pressed={mood === m} onClick={() => void saveMood(m)}
               className={`px-6 py-3 rounded-2xl whitespace-nowrap transition-all border ${
                 mood === m 
                 ? 'bg-pink-500 text-white border-pink-500 shadow-md' 
@@ -67,6 +83,7 @@ const Home: React.FC = () => {
         </div>
       </section>
 
+      {error && <p role="alert" className="text-red-600 text-sm">{error}</p>}
       {/* Quick Tools */}
       <section className="grid grid-cols-2 gap-4">
         {quickActions.map((action) => (
