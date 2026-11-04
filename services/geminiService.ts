@@ -2,12 +2,17 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { FestivalData } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+let ai: GoogleGenAI | undefined;
+function getAi() {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) throw new Error('Aura AI is available in the running application.');
+  return ai ||= new GoogleGenAI({ apiKey });
+}
 
 export const geminiService = {
   async generateRelationshipNote(input: string, context: string): Promise<string> {
     try {
-      const response = await ai.models.generateContent({
+      const response = await getAi().models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Context: ${context}. Expand this short note into a beautiful, poetic, and warm romantic message while maintaining the original sentiment: "${input}"`,
         config: {
@@ -23,7 +28,7 @@ export const geminiService = {
 
   async getChatSuggestions(recentMessages: string[], tone: string): Promise<string[]> {
     try {
-      const response = await ai.models.generateContent({
+      const response = await getAi().models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Recent conversation: ${recentMessages.join("\n")}. Tone identified: ${tone}. Provide 3 short, warm, contextual response suggestions for a partner.`,
         config: {
@@ -42,7 +47,7 @@ export const geminiService = {
 
   async getIndianFestivals(year: number): Promise<FestivalData[]> {
     try {
-      const response = await ai.models.generateContent({
+      const response = await getAi().models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `List the major Indian festivals for the year ${year}. Use accurate lunar/solar calculations for dates.`,
         config: {
@@ -73,7 +78,7 @@ export const geminiService = {
   },
 
   async getPlanDate(preferences: string): Promise<string> {
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Plan a perfect date based on: ${preferences}. Include theme, vibe, detailed steps, and special add-on ideas. Keep it romantic and pastel-toned in spirit.`,
       config: {

@@ -1,35 +1,42 @@
+import { randomId } from '../services/randomId';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Send, Phone, Video, Sparkles, Mic, Image, Info, ChevronLeft, X, MicOff, VideoOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { geminiService } from '../services/geminiService';
+import { useAccount } from '../contexts/AccountContext';
+import { useCoupleCollection } from '../hooks/useCoupleCollection';
+import { MessageRow, sendMessage } from '../services/sharedService';
+import { errorMessage } from '../services/accountService';
 
 const Chat: React.FC = () => {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState([
-    { id: '1', text: 'Hey honey, how was your day? ❤️', sender: 'partner', time: '10:00 AM' },
-    { id: '2', text: 'It was good! Just finishing up some work. You?', sender: 'me', time: '10:02 AM' },
-  ]);
+  const { user } = useAccount();
+  const { rows, loading, error: loadError, connected, reload, hasMore, loadingMore, loadMore } = useCoupleCollection<MessageRow>('messages');
+  const messages = useMemo(()=>[...rows].reverse().map(m => ({ id:m.id, text:m.body, sender:m.author_id === user?.id ? 'me':'partner', time:new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) })),[rows,user?.id]);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const pending = useRef<{ body:string; id:string } | null>(null);
   const [inputText, setInputText] = useState('');
   const [isCalling, setIsCalling] = useState<'audio' | 'video' | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  const newest = messages[messages.length-1]?.id;
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [newest]);
 
-  const handleSend = () => {
-    if (!inputText.trim()) return;
-    const newMessage = {
-      id: Date.now().toString(),
-      text: inputText,
-      sender: 'me',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-    setMessages([...messages, newMessage]);
-    setInputText('');
-    setSuggestions([]);
+  const handleSend = async () => {
+    const body = inputText.trim();
+    if (!body || !user?.coupleId || sending) return;
+    // Keep the same message ID on retry to prevent duplicates after a lost response.
+    if (pending.current?.body !== body) pending.current = { body, id:randomId() };
+    setSending(true); setSendError('');
+    try {
+      await sendMessage(user.coupleId, body, pending.current.id, user.id);
+      setInputText(''); setSuggestions([]); pending.current = null; reload();
+    } catch(e) { setSendError(errorMessage(e)); } finally { setSending(false); }
   };
 
   const getAiSuggestions = async () => {
@@ -46,7 +53,7 @@ const Chat: React.FC = () => {
         </div>
         <div className="text-center">
           <h2 className="text-3xl font-bold">Calling My Partner</h2>
-          <p className="text-pink-100 mt-2">Aura-Encrypted {isCalling === 'video' ? 'Video' : 'Voice'} Call</p>
+          <p className="text-pink-100 mt-2">Call preview · Live calling is not connected yet</p>
         </div>
       </div>
       
@@ -76,9 +83,9 @@ const Chat: React.FC = () => {
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/')} className="text-pink-400"><ChevronLeft size={28} /></button>
           <div className="flex flex-col">
-            <span className="font-bold text-gray-800">My Partner</span>
+            <span className="font-bold text-gray-800">{user?.partnerNickname || 'My Partner'}</span>
             <span className="text-[10px] text-green-500 font-semibold tracking-wide flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Aura-connected
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span> {connected ? 'Connected' : 'Reconnecting…'}
             </span>
           </div>
         </div>
@@ -90,6 +97,10 @@ const Chat: React.FC = () => {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+        {hasMore && <button disabled={loadingMore} onClick={()=>void loadMore()} className="w-full text-sm font-bold text-pink-500">{loadingMore ? 'Loading…' : 'Load earlier messages'}</button>}
+        {loading && <p role="status" className="text-center text-gray-400">Opening your conversation…</p>}
+        {!loading && !messages.length && <p className="text-center text-gray-400">Your conversation starts here 💕</p>}
+        {(loadError || sendError) && <p role="alert" className="text-red-600">{loadError || sendError}<button onClick={reload} className="ml-2 underline">Retry</button></p>}
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[80%] px-5 py-3 rounded-3xl text-sm ${
@@ -131,7 +142,7 @@ const Chat: React.FC = () => {
           </button>
           <div className="flex-1 bg-gray-50 rounded-2xl px-4 py-2 flex items-center gap-2 border border-gray-100 focus-within:border-pink-300 transition-all">
             <input 
-              type="text" 
+              aria-label="Message" maxLength={4000} disabled={sending} type="text"
               placeholder="Type your message..." 
               className="bg-transparent flex-1 outline-none text-sm text-gray-700"
               value={inputText}
@@ -143,7 +154,7 @@ const Chat: React.FC = () => {
           </div>
           <button 
             onClick={handleSend}
-            disabled={!inputText.trim()}
+            aria-label="Send message" disabled={sending || !inputText.trim()}
             className="p-3 bg-pink-500 text-white rounded-2xl shadow-lg shadow-pink-200 disabled:bg-gray-200 disabled:shadow-none transition-all"
           >
             <Send size={20} />
